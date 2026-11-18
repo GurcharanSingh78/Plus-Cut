@@ -1,0 +1,6 @@
+{
+  "name": "Plus Cut",
+  "description": "High-contrast dark-themed mobile video editing studio inspired by CapCut with multi-track timeline, real-time filters, overlays, audio mixing, and Media3 playback.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">Plus Cut</string>
+    <string name="default_project_title">Untitled Project</string>
+    <string name="action_export">Export</string>
+    <string name="action_import_media">Import Media</string>
+    <string name="action_undo">Undo</string>
+    <string name="action_redo">Redo</string>
+    <string name="action_split">Split</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_play">Play</string>
+    <string name="action_pause">Pause</string>
+    <string name="action_fullscreen">Toggle Fullscreen</string>
+</resources>
