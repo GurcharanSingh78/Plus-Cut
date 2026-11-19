@@ -3,12 +3,11 @@ package com.example.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -36,11 +35,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.model.AudioClip
 import com.example.model.OverlayItem
 import com.example.model.SelectedElement
 import com.example.model.TextAlignmentOption
+import com.example.model.TextFontStyle
 import com.example.model.VideoAdjustments
 import com.example.model.VideoClip
 import com.example.ui.theme.AudioTeal
@@ -95,7 +97,7 @@ fun RightInspectorPanel(
           text =
             when {
               selectedElement is SelectedElement.Overlay && selectedOverlay is OverlayItem.TextOverlay ->
-                "Text Properties"
+                "Text & Fonts"
               selectedElement is SelectedElement.Overlay && selectedOverlay is OverlayItem.StickerOverlay ->
                 "Sticker Properties"
               selectedElement is SelectedElement.Audio && selectedAudio != null ->
@@ -210,7 +212,6 @@ private fun VideoAdjustmentsInspector(
     testTag = "slider_saturation",
   )
 
-  // Speed Chips
   Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
     Text(
       text = "Playback Speed",
@@ -266,7 +267,7 @@ private fun TextOverlayInspector(
   OutlinedTextField(
     value = overlay.text,
     onValueChange = { newText -> onUpdate { it.copy(text = newText) } },
-    label = { Text("Text Content", style = MaterialTheme.typography.bodySmall) },
+    label = { Text("Enter Your Text", style = MaterialTheme.typography.bodySmall) },
     singleLine = false,
     maxLines = 3,
     colors =
@@ -281,6 +282,60 @@ private fun TextOverlayInspector(
     modifier = Modifier.fillMaxWidth().testTag("text_overlay_input"),
   )
 
+  Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Text(
+      text = "Font Style",
+      style = MaterialTheme.typography.bodySmall,
+      color = TextSecondary,
+    )
+    Row(
+      modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+      horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+      TextFontStyle.entries.forEach { fontOpt ->
+        val selected = overlay.fontStyle == fontOpt
+        val previewFamily =
+          when (fontOpt) {
+            TextFontStyle.NORMAL -> FontFamily.SansSerif
+            TextFontStyle.BOLD -> FontFamily.SansSerif
+            TextFontStyle.SERIF -> FontFamily.Serif
+            TextFontStyle.MONO -> FontFamily.Monospace
+            TextFontStyle.CURSIVE -> FontFamily.Cursive
+            TextFontStyle.LIGHT -> FontFamily.SansSerif
+          }
+        val previewWeight =
+          when (fontOpt) {
+            TextFontStyle.BOLD -> FontWeight.ExtraBold
+            TextFontStyle.LIGHT -> FontWeight.Light
+            else -> FontWeight.Medium
+          }
+
+        Box(
+          modifier =
+            Modifier.height(36.dp)
+              .clip(RoundedCornerShape(8.dp))
+              .background(if (selected) NeonPurple.copy(alpha = 0.25f) else StudioSurfaceElevated)
+              .border(
+                1.dp,
+                if (selected) NeonPurple else StudioBorder,
+                RoundedCornerShape(8.dp),
+              )
+              .clickable { onUpdate { it.copy(fontStyle = fontOpt) } }
+              .padding(horizontal = 12.dp),
+          contentAlignment = Alignment.Center,
+        ) {
+          Text(
+            text = fontOpt.label,
+            fontFamily = previewFamily,
+            fontWeight = previewWeight,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (selected) NeonCyan else TextPrimary,
+          )
+        }
+      }
+    }
+  }
+
   InspectorSlider(
     label = "Font Size",
     valueLabel = "${overlay.fontSizeSp.toInt()}sp",
@@ -291,10 +346,9 @@ private fun TextOverlayInspector(
     testTag = "slider_text_size",
   )
 
-  // Color Picker Swatches
   Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
     Text(
-      text = "Color",
+      text = "Text Color",
       style = MaterialTheme.typography.bodySmall,
       color = TextSecondary,
     )
@@ -311,6 +365,7 @@ private fun TextOverlayInspector(
           0xFFFACC15,
           0xFF14B8A6,
           0xFFF59E0B,
+          0xFF0B0D12,
         )
       swatches.forEach { hex ->
         val selected = overlay.colorHex == hex
@@ -330,7 +385,6 @@ private fun TextOverlayInspector(
     }
   }
 
-  // Alignment Buttons
   Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
     Text(
       text = "Alignment",
