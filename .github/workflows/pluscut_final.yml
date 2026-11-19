@@ -1,4 +1,4 @@
-name: Build Plus Cut APK and AAB
+name: Build Plus Cut APK
 
 on:
   push:
@@ -26,20 +26,11 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build Debug APK & Release AAB
-        run: |
-          chmod +x gradlew || true
-          gradle assembleDebug bundleRelease --stacktrace
+      - name: Build Debug APK
+        run: gradle assembleDebug --stacktrace
 
       - name: Upload Debug APK (For Phone Testing)
         uses: actions/upload-artifact@v4
         with:
           name: PlusCut-Debug-APK
           path: app/build/outputs/apk/debug/*.apk
-
-      - name: Upload Release AAB (For Play Store)
-        uses: actions/upload-artifact@v4
-        with:
-          name: PlusCut-Release-AAB
-          path: app/build/outputs/bundle/release/*.aab
-          
