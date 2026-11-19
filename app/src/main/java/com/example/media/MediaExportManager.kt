@@ -1,8 +1,13 @@
 package com.example.media
 
+import android.content.ContentValues
 import android.content.Context
+import android.media.MediaScannerConnection
+import android.os.Build
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.provider.MediaStore
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.transformer.Composition
@@ -17,11 +22,12 @@ import com.example.model.ExportFps
 import com.example.model.ExportResolution
 import com.example.model.MediaSource
 import java.io.File
+import java.io.FileInputStream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @androidx.annotation.OptIn(UnstableApi::class)
 class MediaExportManager(
@@ -48,9 +54,11 @@ class MediaExportManager(
         .replace(Regex("[^a-zA-Z0-9_\\- ]"), "")
         .replace(" ", "_")
         .ifBlank { "PlusCut_Export" }
-    val outDir = File(context.filesDir, "exports").apply { mkdirs() }
-    val outputFile = File(outDir, "${safeName}_${resolution.label}_${fps.fps}fps.mp4")
-    if (outputFile.exists()) outputFile.delete()
+    val timestamp = System.currentTimeMillis()
+    val finalFileName = "${safeName}_${resolution.label}_${fps.fps}fps_${timestamp}.mp4"
+    val tempDir = File(context.cacheDir, "exports").apply { mkdirs() }
+    val tempOutputFile = File(tempDir, finalFileName)
+    if (tempOutputFile.exists()) tempOutputFile.delete()
 
     val firstLocalVideo =
       state.videoTrack.firstOrNull { it.source is MediaSource.LocalVideo }
@@ -62,16 +70,14 @@ class MediaExportManager(
         state = state,
         resolution = resolution,
         fps = fps,
-        outputFile = outputFile,
+        tempOutputFile = tempOutputFile,
+        finalFileName = finalFileName,
         onProgress = onProgress,
         onComplete = onComplete,
-        onError = {
-          // Graceful fallback to timeline render pipeline if device codec rejects parameters
-          startTimelineRenderExport(state, resolution, fps, outputFile, onProgress, onComplete)
-        },
+        onError = onError,
       )
     } else {
-      startTimelineRenderExport(state, resolution, fps, outputFile, onProgress, onComplete)
+      onError("Please add at least one video from your phone gallery before exporting.")
     }
   }
 
@@ -81,7 +87,8 @@ class MediaExportManager(
     state: EditorUiState,
     resolution: ExportResolution,
     fps: ExportFps,
-    outputFile: File,
+    tempOutputFile: File,
+    finalFileName: String,
     onProgress: (Float, String) -> Unit,
     onComplete: (String, String, String) -> Unit,
     onError: (String) -> Unit,
@@ -110,12 +117,28 @@ class MediaExportManager(
             override fun onCompleted(composition: Composition, exportResult: ExportResult) {
               finished = true
               activeTransformer = null
-              val sizeMb = String.format("%.1f MB", (outputFile.length().coerceAtLeast(1024L)) / (1024f * 1024f))
-              onComplete(
-                outputFile.name,
-                outputFile.absolutePath,
-                "${resolution.label} • ${fps.label} • ${state.aspectRatio.shortTag} • $sizeMb",
-              )
+              onProgress(0.95f, "Saving video to Phone Gallery...")
+              scope.launch(Dispatchers.IO) {
+                val galleryPath = saveMp4ToGallery(tempOutputFile, finalFileName)
+                val sizeMb =
+                  String.format(
+                    "%.1f MB",
+                    (tempOutputFile.length().coerceAtLeast(1024L)) / (1024f * 1024f),
+                  )
+                tempOutputFile.delete()
+                withContext(Dispatchers.Main) {
+                  if (galleryPath != null) {
+                    onProgress(1.0f, "Saved to Gallery!")
+                    onComplete(
+                      finalFileName,
+                      galleryPath,
+                      "Saved to Gallery (Movies/PlusCut) • ${resolution.label} • ${fps.label} • $sizeMb",
+                    )
+                  } else {
+                    onError("Video rendered but failed to save into Gallery.")
+                  }
+                }
+              }
             }
 
             override fun onError(
@@ -131,8 +154,8 @@ class MediaExportManager(
 
         val transformer = Transformer.Builder(context).addListener(listener).build()
         activeTransformer = transformer
-        onProgress(0.05f, "Encoding local video via Media3...")
-        transformer.start(editedMediaItem, outputFile.absolutePath)
+        onProgress(0.05f, "Rendering video...")
+        transformer.start(editedMediaItem, tempOutputFile.absolutePath)
 
         val pollRunnable =
           object : Runnable {
@@ -140,8 +163,8 @@ class MediaExportManager(
               if (finished || activeTransformer == null) return
               val pState = transformer.getProgress(progressHolder)
               if (pState == Transformer.PROGRESS_STATE_AVAILABLE) {
-                val pct = (progressHolder.progress / 100f).coerceIn(0.05f, 0.99f)
-                onProgress(pct, "Rendering frames (${(pct * 100).toInt()}%)...")
+                val pct = (progressHolder.progress / 100f).coerceIn(0.05f, 0.92f)
+                onProgress(pct, "Rendering video (${(pct * 100).toInt()}%)...")
               }
               if (pState != Transformer.PROGRESS_STATE_NOT_STARTED && !finished) {
                 mainHandler.postDelayed(this, 180)
@@ -155,45 +178,50 @@ class MediaExportManager(
     }
   }
 
-  private fun startTimelineRenderExport(
-    state: EditorUiState,
-    resolution: ExportResolution,
-    fps: ExportFps,
-    outputFile: File,
-    onProgress: (Float, String) -> Unit,
-    onComplete: (String, String, String) -> Unit,
-  ) {
-    activeJob =
-      scope.launch(Dispatchers.Default) {
-        val stages =
-          listOf(
-            0.18f to "Compositing ${state.videoTrack.size} video clips...",
-            0.44f to "Applying ${state.globalFilter.label} & color grades...",
-            0.70f to "Rasterizing ${state.overlayTrack.size} text & sticker layers...",
-            0.90f to "Muxing ${state.audioTrack.size} audio tracks at ${fps.label}...",
-            1.00f to "Finalizing ${resolution.label} container...",
-          )
-        var current = 0f
-        for ((target, label) in stages) {
-          val steps = 8
-          val delta = (target - current) / steps
-          repeat(steps) {
-            current += delta
-            onProgress(current.coerceIn(0f, 1f), label)
-            delay(75)
+  private fun saveMp4ToGallery(sourceFile: File, displayName: String): String? {
+    if (!sourceFile.exists() || sourceFile.length() == 0L) return null
+    return try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val values =
+          ContentValues().apply {
+            put(MediaStore.Video.Media.DISPLAY_NAME, displayName)
+            put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+            put(
+              MediaStore.Video.Media.RELATIVE_PATH,
+              Environment.DIRECTORY_MOVIES + "/PlusCut",
+            )
+            put(MediaStore.Video.Media.IS_PENDING, 1)
           }
+        val resolver = context.contentResolver
+        val uri =
+          resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values) ?: return null
+        resolver.openOutputStream(uri)?.use { out ->
+          FileInputStream(sourceFile).use { input -> input.copyTo(out) }
         }
-        val durationSec = state.totalDurationMs / 1000f
-        val estMb = durationSec * resolution.mbPerSec * (if (fps == ExportFps.FPS_60) 1.35f else 1f)
-        outputFile.writeText(
-          "PlusCut Project Render\nTitle: ${state.projectTitle}\nRatio: ${state.aspectRatio.label}\nResolution: ${resolution.label} @ ${fps.label}\nClips: ${state.videoTrack.size}\nOverlays: ${state.overlayTrack.size}\nAudio: ${state.audioTrack.size}\n"
+        values.clear()
+        values.put(MediaStore.Video.Media.IS_PENDING, 0)
+        resolver.update(uri, values, null, null)
+        "Movies/PlusCut/$displayName"
+      } else {
+        @Suppress("DEPRECATION")
+        val moviesDir =
+          File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
+            "PlusCut",
+          ).apply { mkdirs() }
+        val destFile = File(moviesDir, displayName)
+        sourceFile.copyTo(destFile, overwrite = true)
+        MediaScannerConnection.scanFile(
+          context,
+          arrayOf(destFile.absolutePath),
+          arrayOf("video/mp4"),
+          null,
         )
-        onComplete(
-          outputFile.name,
-          outputFile.absolutePath,
-          "${resolution.label} • ${fps.label} • ${state.aspectRatio.shortTag} • ~${String.format("%.1f", estMb)} MB",
-        )
+        destFile.absolutePath
       }
+    } catch (_: Exception) {
+      null
+    }
   }
 
   fun cancelExport() {
