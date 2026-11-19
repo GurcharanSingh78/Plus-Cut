@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -58,6 +57,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
@@ -75,6 +75,7 @@ import com.example.model.MediaSource
 import com.example.model.OverlayItem
 import com.example.model.SelectedElement
 import com.example.model.TextAlignmentOption
+import com.example.model.TextFontStyle
 import com.example.model.TextTemplateStyle
 import com.example.model.VideoAdjustments
 import com.example.model.VideoClip
@@ -113,7 +114,6 @@ fun PreviewCanvasPanel(
     horizontalAlignment = Alignment.CenterHorizontally,
     verticalArrangement = Arrangement.SpaceBetween,
   ) {
-    // Responsive Aspect-Locked Preview Frame
     Box(
       modifier = Modifier.weight(1f).fillMaxWidth(),
       contentAlignment = Alignment.Center,
@@ -206,7 +206,6 @@ fun PreviewCanvasPanel(
             }
           }
 
-          // Active Overlays (Text & Stickers)
           visibleOverlays.forEach { overlay ->
             val isSelected =
               (selectedElement as? SelectedElement.Overlay)?.overlayId == overlay.id
@@ -225,7 +224,6 @@ fun PreviewCanvasPanel(
 
     Spacer(modifier = Modifier.height(6.dp))
 
-    // Playback Transport Bar
     Row(
       modifier =
         Modifier.fillMaxWidth()
@@ -237,16 +235,14 @@ fun PreviewCanvasPanel(
       verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-      // Timecode
       Text(
         text =
-          "${StudioViewModel.formatTimeMs(playheadMs)} / ${StudioViewModel.formatTimeMs(totalDurationMs)}",
+          "${StudioViewModel.formatTimeMs(playheadMs)} /${StudioViewModel.formatTimeMs(totalDurationMs)}",
         style = MaterialTheme.typography.labelSmall,
         color = TextPrimary,
         modifier = Modifier.testTag("timecode_display"),
       )
 
-      // Center Controls
       Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -283,7 +279,6 @@ fun PreviewCanvasPanel(
         }
       }
 
-      // Fullscreen toggle
       IconButton(
         onClick = onToggleFullscreen,
         modifier = Modifier.size(40.dp).testTag("fullscreen_button"),
@@ -415,14 +410,33 @@ private fun DraggableOverlayItem(
             Modifier
           }
 
+        val resolvedFontFamily =
+          when (overlay.fontStyle) {
+            TextFontStyle.NORMAL -> FontFamily.SansSerif
+            TextFontStyle.BOLD -> FontFamily.SansSerif
+            TextFontStyle.SERIF -> FontFamily.Serif
+            TextFontStyle.MONO -> FontFamily.Monospace
+            TextFontStyle.CURSIVE -> FontFamily.Cursive
+            TextFontStyle.LIGHT -> FontFamily.SansSerif
+          }
+
+        val resolvedFontWeight =
+          when (overlay.fontStyle) {
+            TextFontStyle.NORMAL -> FontWeight.Normal
+            TextFontStyle.BOLD -> FontWeight.ExtraBold
+            TextFontStyle.SERIF -> FontWeight.Bold
+            TextFontStyle.MONO -> FontWeight.Medium
+            TextFontStyle.CURSIVE -> FontWeight.Bold
+            TextFontStyle.LIGHT -> FontWeight.Light
+          }
+
         Text(
           text = overlay.text.ifBlank { "Text" },
           style =
             MaterialTheme.typography.titleMedium.copy(
               fontSize = overlay.fontSizeSp.sp,
-              fontWeight =
-                if (overlay.style == TextTemplateStyle.BOLD_CAPTION) FontWeight.ExtraBold
-                else FontWeight.Bold,
+              fontFamily = resolvedFontFamily,
+              fontWeight = resolvedFontWeight,
               shadow = shadow,
               letterSpacing =
                 if (overlay.style == TextTemplateStyle.CINEMATIC_SUBTITLE) 2.sp else 0.sp,
