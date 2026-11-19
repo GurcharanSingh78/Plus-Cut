@@ -132,7 +132,6 @@ fun PlusCutStudioScreen(viewModel: StudioViewModel) {
         )
 
         if (isWideStudio) {
-          // 3-Panel Desktop/Landscape Studio Layout + Bottom Multi-Track Timeline
           Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
             LeftToolsPanel(
               activeTab = uiState.activeTab,
@@ -213,7 +212,7 @@ fun PlusCutStudioScreen(viewModel: StudioViewModel) {
             modifier = Modifier.height(215.dp).fillMaxWidth(),
           )
         } else {
-          // Adaptive Portrait Phone Studio Layout
+          // Larger CapCut-Style Portrait Video Preview
           PreviewCanvasPanel(
             aspectRatio = uiState.aspectRatio,
             activeClip = uiState.activeVideoClip,
@@ -233,14 +232,14 @@ fun PlusCutStudioScreen(viewModel: StudioViewModel) {
               compactTray = CompactTray.INSPECTOR
             },
             onDragOverlay = viewModel::dragOverlayPosition,
-            modifier = Modifier.weight(if (compactTray == CompactTray.NONE) 0.50f else 0.36f).fillMaxWidth(),
+            modifier = Modifier.weight(if (compactTray == CompactTray.NONE) 0.58f else 0.45f).fillMaxWidth(),
           )
 
           if (compactTray != CompactTray.NONE) {
             Column(
               modifier =
                 Modifier.fillMaxWidth()
-                  .height(210.dp)
+                  .height(190.dp)
                   .background(StudioPanel)
                   .border(1.dp, StudioBorder)
             ) {
@@ -256,7 +255,7 @@ fun PlusCutStudioScreen(viewModel: StudioViewModel) {
                 Text(
                   text =
                     if (compactTray == CompactTray.TOOLS) uiState.activeTab.label
-                    else "Inspector",
+                    else "Edit & Style",
                   style = MaterialTheme.typography.labelMedium,
                   color = NeonCyan,
                 )
@@ -286,7 +285,10 @@ fun PlusCutStudioScreen(viewModel: StudioViewModel) {
                   onAddMediaToTimeline = viewModel::addMediaToTimeline,
                   onPreviewAudio = viewModel::togglePreviewAudioPreset,
                   onAddAudioToTimeline = viewModel::addAudioToTimeline,
-                  onAddTextTemplate = viewModel::addTextTemplate,
+                  onAddTextTemplate = { style ->
+                    viewModel.addTextTemplate(style)
+                    compactTray = CompactTray.INSPECTOR
+                  },
                   onSelectFilter = viewModel::applyFilterPreset,
                   onAddSticker = viewModel::addSticker,
                   modifier = Modifier.fillMaxSize(),
@@ -331,7 +333,7 @@ fun PlusCutStudioScreen(viewModel: StudioViewModel) {
             onTrimOverlay = viewModel::trimOverlay,
             onShiftAudio = viewModel::shiftAudio,
             onTrimAudio = viewModel::trimAudio,
-            modifier = Modifier.weight(if (compactTray == CompactTray.NONE) 0.50f else 0.34f).fillMaxWidth(),
+            modifier = Modifier.weight(if (compactTray == CompactTray.NONE) 0.42f else 0.30f).fillMaxWidth(),
           )
 
           // Compact Bottom Studio Dock
@@ -355,7 +357,6 @@ fun PlusCutStudioScreen(viewModel: StudioViewModel) {
         }
       }
 
-      // Status Feedback Pill
       AnimatedVisibility(
         visible = uiState.statusMessage != null,
         enter = fadeIn(),
@@ -377,7 +378,6 @@ fun PlusCutStudioScreen(viewModel: StudioViewModel) {
         }
       }
 
-      // Fullscreen Preview Overlay
       if (uiState.isFullscreen) {
         BackHandler { viewModel.toggleFullscreen() }
         Box(
@@ -508,7 +508,7 @@ private fun DockButton(
         .clip(RoundedCornerShape(8.dp))
         .background(if (selected) StudioSurfaceElevated else Color.Transparent)
         .clickable(onClick = onClick)
-        .padding(horizontal = 8.dp)
+        .padding(horizontal = 8.dp, vertical = 4.dp)
         .testTag(testTag),
     horizontalAlignment = Alignment.CenterHorizontally,
     verticalArrangement = Arrangement.Center,
@@ -522,9 +522,8 @@ private fun DockButton(
     Spacer(modifier = Modifier.height(2.dp))
     Text(
       text = label,
-      style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
-      color = if (selected) accent else TextPrimary,
-      maxLines = 1,
+      fontSize = 10.sp,
+      color = if (selected) TextPrimary else TextSecondary,
     )
   }
 }
